@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Investment Calculator with Inflation</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root{
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --primary:#2563eb;
+  --success:#16a34a;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e5e7eb;
+  --radius:18px;
+  --shadow:0 20px 40px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui,Arial;
+  background:var(--bg);
+  color:var(--text);
+}
+.container{
+  max-width:1200px;
+  margin:auto;
+  padding:18px;
+}
+h1{
+  text-align:center;
+  color:var(--primary);
+  margin-bottom:24px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:24px;
+}
+.card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:22px;
+}
+label{
+  display:block;
+  margin-top:14px;
+  font-size:14px;
+}
+input,select{
+  width:100%;
+  padding:12px;
+  margin-top:6px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  font-size:15px;
+}
+button{
+  width:100%;
+  margin-top:16px;
+  padding:15px;
+  font-size:16px;
+  border:none;
+  border-radius:14px;
+  cursor:pointer;
+}
+.primary{background:var(--primary);color:#fff}
+.secondary{
+  background:#eef2ff;
+  color:var(--primary);
+  border:1px solid #c7d2fe;
+}
+.summary{
+  background:#ecfdf5;
+  border-left:6px solid var(--success);
+  padding:16px;
+  border-radius:14px;
+  margin-bottom:16px;
+}
+.stats{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:14px;
+}
+.stat{
+  background:#f8fafc;
+  padding:14px;
+  border-radius:12px;
+  text-align:center;
+}
+.stat .value{
+  font-size:22px;
+  font-weight:700;
+  color:var(--primary);
+}
+.stat .label{
+  font-size:13px;
+  color:var(--muted);
+}
+.note{
+  font-size:13px;
+  color:var(--muted);
+  margin-top:10px;
+}
+canvas{margin-top:24px}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+  .stats{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>Investment Calculator (with Inflation)</h1>
+
+<div class="grid">
+
+<!-- INPUT -->
+<div class="card">
+
+<label>Initial Investment</label>
+<input id="principal" value="10000">
+
+<label>Monthly Contribution</label>
+<input id="monthly" value="500">
+
+<label>Expected Annual Return (%)</label>
+<input id="rate" value="8">
+
+<label>Inflation Rate (%)</label>
+<input id="inflation" value="3">
+
+<label>Investment Period (Years)</label>
+<input id="years" value="20">
+
+<label>Compounding Frequency</label>
+<select id="freq">
+  <option value="12">Monthly</option>
+  <option value="4">Quarterly</option>
+  <option value="1">Yearly</option>
+  <option value="365">Daily</option>
+  <option value="continuous">Continuously</option>
+</select>
+
+<label>Currency</label>
+<select id="currency">
+  <option value="$">USD ($)</option>
+  <option value="€">EUR (€)</option>
+  <option value="£">GBP (£)</option>
+  <option value="₹">INR (₹)</option>
+  <option value="C$">CAD (C$)</option>
+  <option value="A$">AUD (A$)</option>
+</select>
+
+<button class="primary" onclick="calculate()">Calculate</button>
+<button class="secondary" onclick="clearForm()">Clear</button>
+<button class="secondary" onclick="downloadCSV()">Download CSV</button>
+
+</div>
+
+<!-- OUTPUT -->
+<div class="card">
+
+<div class="summary">
+<strong>Investment growth with and without inflation.</strong>
+<div class="note">
+Nominal value shows the future amount.  
+Real value shows the equivalent value in today’s purchasing power.
+</div>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="value" id="nominal">—</div>
+    <div class="label">Final Value (Nominal)</div>
+  </div>
+  <div class="stat">
+    <div class="value" id="real">—</div>
+    <div class="label">Final Value (Real)</div>
+  </div>
+  <div class="stat">
+    <div class="value" id="contrib">—</div>
+    <div class="label">Total Contributions</div>
+  </div>
+</div>
+
+<canvas id="chart"></canvas>
+
+</div>
+
+</div>
+</div>
+
+<script>
+let chart;
+
+function fmt(v){
+  let sym = currency.value;
+  return sym + Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+}
+
+function calculate(){
+  let P = +principal.value;
+  let PMT = +monthly.value;
+  let r = +rate.value / 100;
+  let inf = +inflation.value / 100;
+  let t = +years.value;
+  let f = freq.value;
+
+  let labels = [];
+  let dataNominal = [];
+  let dataReal = [];
+
+  let balNom = P;
+  let balReal = P;
+  let totalContrib = P;
+
+  for(let year=1; year<=t; year++){
+    if(f === "continuous"){
+      balNom = balNom * Math.exp(r) + (PMT * 12);
+      balReal = balReal * Math.exp(r - inf) + (PMT * 12);
+    } else {
+      let n = +f;
+      for(let i=0;i<n;i++){
+        balNom = balNom * (1 + r/n) + (PMT * 12 / n);
+        balReal = balReal * (1 + (r - inf)/n) + (PMT * 12 / n);
+      }
+    }
+    totalContrib += PMT * 12;
+    labels.push("Year " + year);
+    dataNominal.push(balNom);
+    dataReal.push(balReal);
+  }
+
+  nominal.innerHTML = fmt(balNom);
+  real.innerHTML = fmt(balReal);
+  contrib.innerHTML = fmt(totalContrib);
+
+  if(chart) chart.destroy();
+  chart = new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{
+      labels: labels,
+      datasets:[
+        {label:"Nominal Value", data:dataNominal, borderWidth:2},
+        {label:"Real Value (Inflation-Adjusted)", data:dataReal, borderWidth:2}
+      ]
+    }
+  });
+}
+
+function clearForm(){
+  document.querySelectorAll("input").forEach(i=>i.value="");
+  nominal.innerHTML="—";
+  real.innerHTML="—";
+  contrib.innerHTML="—";
+  if(chart) chart.destroy();
+}
+
+function downloadCSV(){
+  const rows=[
+    ["Field","Value"],
+    ["Initial Investment",principal.value],
+    ["Monthly Contribution",monthly.value],
+    ["Annual Return %",rate.value],
+    ["Inflation %",inflation.value],
+    ["Years",years.value],
+    ["Compounding",freq.options[freq.selectedIndex].text],
+    ["Final Nominal Value",nominal.innerText],
+    ["Final Real Value",real.innerText],
+    ["Total Contributions",contrib.innerText]
+  ];
+  let csv=rows.map(r=>r.join(",")).join("\n");
+  let blob=new Blob([csv],{type:"text/csv"});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement("a");
+  a.href=url;
+  a.download="investment-calculation.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
